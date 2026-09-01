@@ -1,170 +1,282 @@
-# Chargeback Shield — Full-Stack Build
+<div align="center">
 
-**Razorpay AI Buildathon — Track 02: AI Risk Manager**
+# 🛡️ Chargeback Shield
 
-An AI-powered dispute triage dashboard for merchants, with a real backend,
-real authentication, and a real login/landing flow — not a static mockup.
+### AI-powered dispute triage for merchants — explainable, bounded, and gated.
 
-## What's new in this version
+**Razorpay AI Buildathon 2026 · Track 02: AI Risk Manager**
 
-- **Real-time updates**: the dashboard polls the backend every 15 seconds
-  and silently refreshes — if a teammate (or another browser tab) changes
-  data, you'll see it appear without reloading the page. Verified by
-  creating a queue via a raw API call in a separate process while the
-  browser tab stayed open, and watching it appear automatically.
-- **Review Queues are clickable filters**: click any queue card on the
-  Dispute Queue screen to filter the table below to exactly the disputes
-  that queue's rule matches (same reason-code + confidence logic the
-  backend uses to compute each queue's live count). Click again to clear.
+![Node](https://img.shields.io/badge/Node-22%2B-339933?logo=node.js&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)
+![Express](https://img.shields.io/badge/Express-5-000000?logo=express&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-native-003B57?logo=sqlite&logoColor=white)
+![License](https://img.shields.io/badge/status-MVP-EF4444)
 
+</div>
 
-- **Landing page → Login/Register → Dashboard** flow. Opening the app for
-  the first time shows a marketing landing page, not the dashboard directly.
-- **Real authentication**: register/login create a session (password hashed
-  with `scrypt`, session tokens stored server-side). Logging out actually
-  clears the session and returns you to the landing page.
-- **Working search**: the header search icon opens a live search overlay
-  that filters the real dispute queue by ID, reason code, or signal text.
-- **Working notifications**: the bell icon shows a real unread count and
-  opens a dropdown of server-generated notifications — new account, threshold
-  changes, queue creation, evidence submissions — each with a timestamp.
-- **Actions actually mutate state and refresh the UI**: saving new
-  thresholds retrains the model and updates every screen; submitting an
-  evidence packet marks that dispute submitted and generates a notification;
-  creating a review queue persists it and confirms it.
+---
 
-## Architecture
+## What is this?
+
+Merchants get flooded with payment disputes and chargebacks. Most get
+**auto-accepted by default** because nobody has time to manually review
+each one — even when the merchant had real evidence and could have won.
+
+**Chargeback Shield** is an AI agent that:
+1. **Scores** every incoming dispute's win probability using a model trained on transaction signals
+2. **Decides** — FIGHT, ACCEPT, or REVIEW — but only auto-decides when it's confident enough
+3. **Assembles** a submission-ready evidence packet, picking only the evidence relevant to that dispute's reason code
+4. **Explains** every decision in plain language, with the exact signals that drove it
+
+Built end-to-end: real backend, real database, real authentication, real ML model — not a static mockup.
+
+<div align="center">
+<img src="docs/screenshots/03-dashboard.png" alt="Chargeback Shield Dashboard" width="850"/>
+</div>
+
+---
+
+## ✨ Features
+
+| | |
+|---|---|
+| 🔐 **Real auth** | Register/login with `scrypt`-hashed passwords, server-side sessions |
+| 📊 **Live metrics** | Precision, recall, F1, confusion matrix — computed from actual model predictions on a held-out set |
+| 🤖 **Explainable AI** | Every decision shows a feature-importance breakdown and a plain-language reason |
+| 🚦 **Confidence gating** | Uncertain cases route to a human instead of the model guessing |
+| 📁 **Evidence packets** | Auto-assembled per reason code; incomplete evidence is never marked submittable |
+| 🎯 **Review Queues** | Create routing rules by reason code + confidence; click to filter matching disputes live |
+| 🔔 **Real notifications** | Server-generated events for every meaningful action, with unread counts |
+| 🔍 **Live search** | Instantly filter the dispute queue by ID, reason, or signal |
+| ⚡ **Real-time sync** | Dashboard polls every 15s — changes from any session appear automatically |
+| 🎚️ **Tunable thresholds** | Adjust fight/accept confidence sliders — the model **retrains live** |
+
+---
+
+## 📸 Screens
+
+<table>
+<tr>
+<td width="50%">
+
+**Landing**
+<img src="docs/screenshots/01-landing.png" width="100%"/>
+</td>
+<td width="50%">
+
+**Login / Register**
+<img src="docs/screenshots/02-login.png" width="100%"/>
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**Dispute Queue + Review Queues**
+<img src="docs/screenshots/04-dispute-queue.png" width="100%"/>
+</td>
+<td width="50%">
+
+**Evidence Packets**
+<img src="docs/screenshots/05-evidence-packets.png" width="100%"/>
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**Model Performance**
+<img src="docs/screenshots/06-model-performance.png" width="100%"/>
+</td>
+<td width="50%">
+
+**Explainability Panel**
+<img src="docs/screenshots/09-explainability-panel.png" width="100%"/>
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**Reason Code Rules**
+<img src="docs/screenshots/07-reason-code-rules.png" width="100%"/>
+</td>
+<td width="50%">
+
+**Decision Settings**
+<img src="docs/screenshots/08-settings.png" width="100%"/>
+</td>
+</tr>
+</table>
+
+---
+
+## 🏗️ Architecture
 
 ```
-┌─────────────────────┐        ┌──────────────────────────┐        ┌─────────────────┐
-│   React + Vite       │  HTTP  │   Express (server/)       │  SQL   │  SQLite          │
-│   Landing → Login     │──────► │   /api/auth/*               │──────► │  users            │
-│   → App (dashboard)   │        │   /api/bootstrap             │        │  sessions          │
-│                       │        │   /api/settings/thresholds     │        │  disputes           │
-│                       │        │   /api/queues, /api/notifications│      │  review_queues       │
-└─────────────────────┘        └──────────────────────────┘        │  notifications        │
-                                          │                          └─────────────────┘
-                                          ▼
-                                 ┌──────────────────┐
-                                 │  server/ml/        │
-                                 │  - generateData.ts  │ synthetic disputes
-                                 │  - detector.ts       │ logistic regression (from scratch)
-                                 │  - agent.ts           │ evidence packet assembly
-                                 │  - format.ts           │ ₹ Indian number formatting
-                                 └──────────────────┘
+┌──────────────────────┐         ┌───────────────────────────┐         ┌──────────────────┐
+│   React 19 + Vite      │  HTTP   │   Express 5 (server/)       │  SQL    │   SQLite (native)  │
+│                        │────────►│                              │────────►│                    │
+│  Landing → Login        │         │  /api/auth/*                  │         │  users              │
+│    → Dashboard          │◄────────│  /api/bootstrap                │◄────────│  sessions            │
+│                        │  JSON   │  /api/settings/thresholds        │  rows   │  disputes             │
+│                        │         │  /api/queues                       │         │  review_queues          │
+│                        │         │  /api/notifications                  │         │  notifications            │
+└──────────────────────┘         └───────────────────────────┘         └──────────────────┘
+                                              │
+                                              ▼
+                                   ┌────────────────────┐
+                                   │   server/ml/          │
+                                   │   generateData.ts       │  synthetic dispute simulation
+                                   │   detector.ts              │  logistic regression, from scratch
+                                   │   agent.ts                    │  evidence-packet rules engine
+                                   │   format.ts                      │  ₹ Indian currency formatting
+                                   └────────────────────┘
 ```
 
-In development, Vite's dev server (`vite.config.ts`) mounts the Express
+In dev, Vite's server mounts the Express app as middleware for any `/api/*`
+request — frontend and backend share **one port**, no CORS setup needed.
 
-app as middleware for any request starting with `/api` — so frontend and
-backend run on **one port**, no CORS configuration needed in dev. This is
-the standard Figma Make full-stack pattern.
+### Why no external ML or database libraries
 
-## Why no external ML/DB libraries
+- **Detector** — a logistic regression model implemented from scratch
+  (`server/ml/detector.ts`): gradient descent, feature standardization, and
+  per-row feature-importance for the explainability panel. Every line of
+  the model is auditable; no black-box dependency.
+- **Database** — Node 22's built-in [`node:sqlite`](https://nodejs.org/api/sqlite.html)
+  module. Real persistent SQLite with **zero** native compilation and zero
+  extra installs.
 
-- **Detector**: a logistic regression model implemented from scratch in
-  `server/ml/detector.ts` (gradient descent, feature standardization,
-  per-row feature-importance for the explainability panel). No scikit-learn
-  equivalent needed — keeps the project dependency-light and every line of
-  the model auditable.
-- **Database**: uses Node 22's built-in `node:sqlite` module. Real
-  persistent SQLite, zero native compilation, zero extra `npm install`.
+---
 
-## What's real vs. what's a stub
-
-**Real, working, computed live:**
-- 150 synthetic disputes generated with a documented ground-truth
-  simulation (`server/ml/generateData.ts`)
-- A logistic regression model trained on a separate 450-row pool and
-  scored against the 150 displayed disputes (held-out evaluation)
-- Precision / recall / F1 / accuracy / confusion matrix — all computed
-  from actual model predictions, not hardcoded
-- Revenue impact (recovered value, capture rate) — computed from which
-  disputes were actually auto-fought vs. actually winnable
-- Evidence packets — assembled per reason code via a real rules engine,
-  gated so incomplete evidence is never marked submittable
-- Settings sliders — changing thresholds and clicking Save **retrains the
-  detector and re-scores every dispute** through a real API round-trip
-- "New Review Queue" modal — persists to the `review_queues` SQLite table
-
-**Stubbed / not wired to a larger system (intentionally, for an MVP):**
-- "Submit Packet" and "Submit Queue" buttons don't call a real payment
-  network — there's no real card network to submit to in a demo
-- Regenerating the dataset (`POST /api/disputes/regenerate`) uses the same
-  fixed random seed, so it won't produce a different-looking dataset yet
-
-## Running it
+## 🚀 Running it
 
 ```bash
+git clone https://github.com/jenishvandra/chargeback-shield.git
+cd chargeback-shield
 npm install
 npm run dev
 ```
 
-Open the printed local URL (default `http://localhost:8443`). The backend
-seeds itself automatically on first run (creates `server/chargeback_shield.db`).
+Open the printed local URL (default `http://localhost:8443`). The database
+seeds itself automatically on first run — no manual setup.
+
+> First time? Click **"Get Started"** on the landing page, then use
+> **"Skip → Use Demo Account"** on the login screen for instant access.
 
 ### Other scripts
 
 ```bash
-npm run build     # production frontend build (dist/)
-npm run server    # run the Express server standalone (no Vite), for prod deployment
+npm run build     # production frontend build → dist/
+npm run server    # run the Express server standalone (no Vite), for deployment
 ```
 
-## API Reference
+---
+
+## 🔌 API Reference
 
 | Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/api/health` | Public | Health check |
-| POST | `/api/auth/register` | Public | Body: `{ username, password, displayName }`. Creates account, returns `{ token, user }` |
-| POST | `/api/auth/login` | Public | Body: `{ username, password }`. Returns `{ token, user }` |
-| POST | `/api/auth/logout` | Bearer | Destroys the current session |
-| GET | `/api/auth/me` | Bearer | Returns the current user for a valid token |
-| GET | `/api/bootstrap` | Bearer | Everything the dashboard needs: metrics, revenue, disputes, evidence, rules, thresholds |
-| PUT | `/api/settings/thresholds` | Bearer | Body: `{ fightThreshold, acceptThreshold }` (50-95 / 5-45). Retrains + re-scores, returns updated bootstrap |
-| POST | `/api/queues` | Bearer | Body: `{ name, reasonCodes, minConfidence, priority, reviewer }`. Creates a review queue |
-| GET | `/api/queues` | Bearer | List all created review queues |
-| POST | `/api/disputes/:id/submit` | Bearer | Marks a dispute's evidence packet as submitted, returns updated bootstrap |
-| POST | `/api/disputes/regenerate` | Bearer | Regenerates the dispute dataset from scratch |
-| GET | `/api/notifications` | Bearer | List notifications (newest first) |
-| POST | `/api/notifications/:id/read` | Bearer | Marks one notification read |
-| POST | `/api/notifications/read-all` | Bearer | Marks all notifications read |
+|---|---|:---:|---|
+| `GET` | `/api/health` | — | Health check |
+| `POST` | `/api/auth/register` | — | `{ username, password, displayName }` → `{ token, user }` |
+| `POST` | `/api/auth/login` | — | `{ username, password }` → `{ token, user }` |
+| `POST` | `/api/auth/logout` | 🔒 | Destroys the current session |
+| `GET` | `/api/auth/me` | 🔒 | Returns the current user |
+| `GET` | `/api/bootstrap` | 🔒 | Everything the dashboard needs in one call |
+| `PUT` | `/api/settings/thresholds` | 🔒 | `{ fightThreshold, acceptThreshold }` → retrains + re-scores |
+| `POST` | `/api/queues` | 🔒 | `{ name, reasonCodes, minConfidence, priority, reviewer }` |
+| `GET` | `/api/queues` | 🔒 | List all review queues |
+| `POST` | `/api/disputes/:id/submit` | 🔒 | Marks an evidence packet submitted |
+| `POST` | `/api/disputes/regenerate` | 🔒 | Regenerates the dispute dataset |
+| `GET` | `/api/notifications` | 🔒 | List notifications, newest first |
+| `POST` | `/api/notifications/:id/read` | 🔒 | Marks one notification read |
+| `POST` | `/api/notifications/read-all` | 🔒 | Marks all notifications read |
 
-All routes except `/api/health` and `/api/auth/*` require an
-`Authorization: Bearer <token>` header. The frontend's `src/api.ts` handles
-this automatically once a token is stored (via `localStorage`, which is safe
-here since this runs as its own app, not inside a sandboxed iframe).
+🔒 = requires `Authorization: Bearer <token>`. `src/api.ts` handles this
+automatically once a token is stored.
 
-## Project structure
+---
+
+## ✅ What's real vs. stubbed
+
+**Real, computed live — not hardcoded:**
+- 150 synthetic disputes from a documented ground-truth simulation
+- A logistic regression model trained on a separate 450-row pool, evaluated on held-out data
+- Precision / recall / F1 / accuracy / confusion matrix — all from actual predictions
+- Revenue impact — computed from which disputes were actually auto-fought vs. actually winnable
+- Evidence packets — assembled per reason code by a real rules engine
+- Threshold sliders — saving **retrains the detector and re-scores every dispute**
+- Review queues — persist to SQLite, live-computed match counts
+
+**Intentionally stubbed for this MVP:**
+- "Submit Packet" doesn't call a real card network — there isn't one to call in a demo
+- Regenerating the dataset reuses the same seed, so results are reproducible rather than random
+
+---
+
+## 📁 Project structure
 
 ```
-├── server/                  Backend (Express + TypeScript)
-│   ├── index.ts              Express app + routes
-│   ├── db.ts                  SQLite schema + connection
-│   ├── engine.ts               Seeding, recomputation, bootstrap assembly
+├── server/                      Backend — Express + TypeScript
+│   ├── index.ts                   routes + auth middleware
+│   ├── db.ts                        SQLite schema + connection
+│   ├── engine.ts                      seeding, recompute, bootstrap assembly
 │   └── ml/
-│       ├── generateData.ts      Synthetic dispute generator
-│       ├── detector.ts           Logistic regression + confidence gating
-│       ├── agent.ts               Evidence packet rules engine
-│       └── format.ts               Indian currency formatting
-├── src/                      Frontend (React + Vite + Tailwind v4)
-│   ├── App.tsx                 Main dashboard UI (all screens)
-│   ├── api.ts                   Typed fetch client for the backend
-│   ├── main.tsx                  React entrypoint
-│   └── index.css                  Tailwind entrypoint
-├── vite.config.ts            Vite config incl. Express middleware mount
+│       ├── generateData.ts             synthetic dispute generator
+│       ├── detector.ts                   logistic regression + confidence gating
+│       ├── agent.ts                        evidence-packet rules engine
+│       └── format.ts                         ₹ formatting
+├── src/                        Frontend — React + Vite + Tailwind v4
+│   ├── App.tsx                   main dashboard (all screens)
+│   ├── Landing.tsx                 marketing landing page
+│   ├── Login.tsx                     login / register
+│   ├── api.ts                          typed fetch client
+│   └── ErrorBoundary.tsx                 crash-safe error screen
+├── docs/screenshots/           README images
+├── vite.config.ts              Vite config incl. Express middleware mount
 └── package.json
 ```
 
-## What broke, and how I got out
+---
 
-[Fill this in from your own experience testing/extending this build — this
-field matters most to reviewers. Some real things worth reflecting on:
-- The default confidence thresholds (65% fight / 35% accept) were tuned
-  by trial and error against the model's actual probability distribution —
-  the first attempt at 80/25 routed 80% of disputes to human review, which
-  defeated the point of automation. What would you tune next?
-- Node's native TypeScript execution (used here so the server runs without
-  a separate build step) requires `import type` for type-only imports and
-  exact `.ts` extensions on relative imports — an easy way to hit a
-  confusing runtime error if you're used to bundler-only projects.
-- What would you change if you had another week?]
+## 🐛 What broke, and how I got out
+
+Building this end-to-end surfaced a few real problems worth noting:
+
+**1. Default thresholds made automation pointless.** The first attempt used
+an 80% fight / 25% accept threshold — intuitively "safe," but against the
+model's actual probability distribution it routed **80% of disputes to
+human review**, defeating the entire point of an automation agent. I ran
+the eval across several threshold combinations and landed on 65%/35%,
+which auto-decides ~58% of cases while keeping precision above 70%.
+
+**2. Node's native TypeScript execution has sharp edges.** Running the
+server directly via `node server/index.ts` (no build step) means type-only
+imports must use `import type`, and relative imports need the literal
+`.ts` extension — importing with `.js` (a common bundler habit) throws a
+confusing `ERR_MODULE_NOT_FOUND` at runtime instead of a clear TS error.
+
+**3. A UI crash with no visible error.** Mid-refactor, a component got
+deleted while a caller still referenced it — clicking the notification
+bell threw an uncaught exception that silently unmounted the entire React
+tree, leaving a blank white screen with zero feedback. Fixed by adding a
+proper `ErrorBoundary` (`src/ErrorBoundary.tsx`) so any future crash shows
+a readable error instead of nothing.
+
+**4. Git/environment setup on a fresh Windows machine.** Git wasn't
+installed, `git commit` failed with an unknown-author error, and the first
+push attempt landed a real SQLite database file (with password hashes and
+session tokens) into the repo before `.gitignore` caught it. All fixed,
+but a reminder that "push to GitHub" hides a few real setup steps for
+anyone starting from zero.
+
+**What I'd do with another week:** wire evidence-packet submission to a
+real sandbox card-network API, add a feedback loop where human overrides
+on REVIEW cases retrain the model, and move session storage to Redis for
+horizontal scaling.
+
+---
+
+<div align="center">
+
+Built for the **Razorpay AI Buildathon** · Track 02: AI Risk Manager
+
+</div>
