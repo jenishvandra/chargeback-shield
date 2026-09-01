@@ -31,10 +31,6 @@ each one — even when the merchant had real evidence and could have won.
 
 Built end-to-end: real backend, real database, real authentication, real ML model — not a static mockup.
 
-<div align="center">
-<img src="docs/screenshots/03-dashboard.png" alt="Chargeback Shield Dashboard" width="850"/>
-</div>
-
 ---
 
 ## ✨ Features
